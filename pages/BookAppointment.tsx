@@ -1,6 +1,117 @@
 
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { ServiceType } from '../types';
+
+// Helper for calendar logic
+const getDaysInMonth = (month: number, year: number) => new Date(year, month + 1, 0).getDate();
+const getFirstDayOfMonth = (month: number, year: number) => new Date(year, month, 1).getDay();
+
+const DatePicker: React.FC<{
+  value: string;
+  onChange: (date: string) => void;
+  error?: string;
+}> = ({ value, onChange, error }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [viewDate, setViewDate] = useState(new Date());
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  const monthNames = [
+    "January", "February", "March", "April", "May", "June",
+    "July", "August", "September", "October", "November", "December"
+  ];
+
+  const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const handlePrevMonth = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setViewDate(new Date(viewDate.getFullYear(), viewDate.getMonth() - 1, 1));
+  };
+
+  const handleNextMonth = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setViewDate(new Date(viewDate.getFullYear(), viewDate.getMonth() + 1, 1));
+  };
+
+  const handleSelectDay = (day: number) => {
+    const selected = new Date(viewDate.getFullYear(), viewDate.getMonth(), day);
+    onChange(selected.toISOString().split('T')[0]);
+    setIsOpen(false);
+  };
+
+  const daysInMonth = getDaysInMonth(viewDate.getMonth(), viewDate.getFullYear());
+  const firstDay = getFirstDayOfMonth(viewDate.getMonth(), viewDate.getFullYear());
+  const blanks = Array(firstDay).fill(null);
+  const daysArray = Array.from({ length: daysInMonth }, (_, i) => i + 1);
+
+  return (
+    <div className="relative" ref={containerRef}>
+      <button
+        type="button"
+        onClick={() => setIsOpen(!isOpen)}
+        className={`w-full p-4 text-left bg-slate-50 border rounded-xl outline-none transition-all flex justify-between items-center ${
+          error 
+            ? 'border-red-500 ring-1 ring-red-500 bg-red-50' 
+            : 'border-slate-200 focus:ring-2 focus:ring-blue-500'
+        }`}
+      >
+        <span className={value ? 'text-slate-900' : 'text-slate-400'}>
+          {value ? value : 'Select a date'}
+        </span>
+        <svg className="w-5 h-5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+        </svg>
+      </button>
+
+      {isOpen && (
+        <div className="absolute z-50 mt-2 p-4 bg-white border border-slate-200 rounded-2xl shadow-2xl w-72 left-0 sm:left-auto sm:right-0">
+          <div className="flex justify-between items-center mb-4">
+            <button onClick={handlePrevMonth} className="p-1 hover:bg-slate-100 rounded-full text-slate-600">
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
+            </button>
+            <span className="font-bold text-slate-900">{monthNames[viewDate.getMonth()]} {viewDate.getFullYear()}</span>
+            <button onClick={handleNextMonth} className="p-1 hover:bg-slate-100 rounded-full text-slate-600">
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+            </button>
+          </div>
+          <div className="grid grid-cols-7 gap-1 text-center mb-2">
+            {days.map(d => <span key={d} className="text-[10px] font-bold text-slate-400 uppercase">{d[0]}</span>)}
+          </div>
+          <div className="grid grid-cols-7 gap-1">
+            {blanks.map((_, i) => <div key={`b-${i}`} />)}
+            {daysArray.map(day => {
+              const dateStr = new Date(viewDate.getFullYear(), viewDate.getMonth(), day).toISOString().split('T')[0];
+              const isSelected = value === dateStr;
+              return (
+                <button
+                  key={day}
+                  type="button"
+                  onClick={() => handleSelectDay(day)}
+                  className={`py-2 text-sm rounded-lg transition-colors ${
+                    isSelected 
+                      ? 'bg-blue-600 text-white font-bold' 
+                      : 'hover:bg-blue-50 text-slate-700'
+                  }`}
+                >
+                  {day}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
 
 const BookAppointment: React.FC = () => {
   const [formData, setFormData] = useState({
@@ -19,24 +130,21 @@ const BookAppointment: React.FC = () => {
   const validate = () => {
     const newErrors: Record<string, string> = {};
 
-    // Full Name validation
     if (!formData.fullName.trim()) {
       newErrors.fullName = 'Full name is required';
     } else if (formData.fullName.length < 3) {
       newErrors.fullName = 'Please enter a valid full name';
     }
 
-    // Phone validation: only digits and spaces
-    const phoneRegex = /^[\d\s]+$/;
+    const phoneRegex = /^[\d\s\+]+$/;
     if (!formData.phone.trim()) {
       newErrors.phone = 'Phone number is required';
     } else if (!phoneRegex.test(formData.phone)) {
-      newErrors.phone = 'Phone number must contain only digits and spaces';
+      newErrors.phone = 'Phone number format is invalid';
     } else if (formData.phone.replace(/\s/g, '').length < 10) {
       newErrors.phone = 'Phone number is too short';
     }
 
-    // Email validation
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!formData.email.trim()) {
       newErrors.email = 'Email address is required';
@@ -44,17 +152,14 @@ const BookAppointment: React.FC = () => {
       newErrors.email = 'Please enter a valid email address';
     }
 
-    // Service validation
     if (!formData.service) {
       newErrors.service = 'Please select a service';
     }
 
-    // Date validation
     if (!formData.date) {
       newErrors.date = 'Appointment date is required';
     }
 
-    // Time validation
     if (!formData.time) {
       newErrors.time = 'Time slot is required';
     }
@@ -65,10 +170,7 @@ const BookAppointment: React.FC = () => {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    
     if (validate()) {
-      console.log('Form data:', formData);
-      // Simulate API call
       setSubmitted(true);
       window.scrollTo(0, 0);
     }
@@ -99,24 +201,19 @@ const BookAppointment: React.FC = () => {
         </div>
         <h1 className="text-4xl font-extrabold text-slate-900 mb-4">Booking Received!</h1>
         <p className="text-lg text-slate-600 mb-8">
-          Thank you, <strong>{formData.fullName}</strong>. One of our consultants will contact you shortly on <strong>{formData.phone}</strong> to confirm your appointment for {formData.date}.
+          Thank you, <strong>{formData.fullName}</strong>. One of our consultants will contact you shortly to confirm your {formData.service} appointment.
         </p>
         <button 
           onClick={() => {
             setSubmitted(false);
             setFormData({
-              fullName: '',
-              phone: '',
-              email: '',
-              service: '',
-              date: '',
-              time: '',
-              message: '',
+              fullName: '', phone: '', email: '', service: '', date: '', time: '', message: '',
             });
+            setErrors({});
           }}
-          className="text-blue-600 font-bold hover:underline"
+          className="bg-blue-600 text-white px-8 py-3 rounded-xl font-bold hover:bg-blue-700 transition-all"
         >
-          Book another appointment
+          Book Another Appointment
         </button>
       </div>
     );
@@ -126,12 +223,12 @@ const BookAppointment: React.FC = () => {
     <div className="max-w-4xl mx-auto py-16 px-4">
       <div className="text-center mb-12">
         <h1 className="text-4xl font-extrabold text-slate-900 mb-4">Book An Appointment</h1>
-        <p className="text-lg text-slate-600">Fill in the form below and our team will get back to you to confirm a time.</p>
+        <p className="text-lg text-slate-600">Secure your slot with our expert technicians today.</p>
       </div>
 
       <div className="bg-white rounded-3xl shadow-2xl overflow-hidden border border-slate-100">
-        <div className="bg-blue-600 p-6 text-white text-center">
-          <p className="font-bold">Fast & Professional Service Guarantee</p>
+        <div className="bg-blue-600 p-4 text-white text-center text-sm font-bold tracking-wide uppercase">
+          TGM Connect • Professional Installation Team
         </div>
         
         <form onSubmit={handleSubmit} className="p-8 md:p-12" noValidate>
@@ -148,7 +245,7 @@ const BookAppointment: React.FC = () => {
                   if (errors.fullName) setErrors({...errors, fullName: ''});
                 }}
               />
-              {errors.fullName && <p className="text-red-500 text-xs font-semibold">{errors.fullName}</p>}
+              {errors.fullName && <p className="text-red-500 text-xs font-semibold ml-1">{errors.fullName}</p>}
             </div>
             
             <div className="space-y-2">
@@ -163,7 +260,7 @@ const BookAppointment: React.FC = () => {
                   if (errors.phone) setErrors({...errors, phone: ''});
                 }}
               />
-              {errors.phone && <p className="text-red-500 text-xs font-semibold">{errors.phone}</p>}
+              {errors.phone && <p className="text-red-500 text-xs font-semibold ml-1">{errors.phone}</p>}
             </div>
 
             <div className="space-y-2">
@@ -178,7 +275,7 @@ const BookAppointment: React.FC = () => {
                   if (errors.email) setErrors({...errors, email: ''});
                 }}
               />
-              {errors.email && <p className="text-red-500 text-xs font-semibold">{errors.email}</p>}
+              {errors.email && <p className="text-red-500 text-xs font-semibold ml-1">{errors.email}</p>}
             </div>
 
             <div className="space-y-2">
@@ -194,21 +291,20 @@ const BookAppointment: React.FC = () => {
                 <option value="">-- Choose a Service --</option>
                 {services.map(s => <option key={s} value={s}>{s}</option>)}
               </select>
-              {errors.service && <p className="text-red-500 text-xs font-semibold">{errors.service}</p>}
+              {errors.service && <p className="text-red-500 text-xs font-semibold ml-1">{errors.service}</p>}
             </div>
 
             <div className="space-y-2">
               <label className="block text-sm font-bold text-slate-700">Preferred Date</label>
-              <input
-                type="date"
-                className={inputClasses('date')}
-                value={formData.date}
-                onChange={(e) => {
-                  setFormData({...formData, date: e.target.value});
+              <DatePicker 
+                value={formData.date} 
+                error={errors.date}
+                onChange={(val) => {
+                  setFormData({...formData, date: val});
                   if (errors.date) setErrors({...errors, date: ''});
-                }}
+                }} 
               />
-              {errors.date && <p className="text-red-500 text-xs font-semibold">{errors.date}</p>}
+              {errors.date && <p className="text-red-500 text-xs font-semibold ml-1">{errors.date}</p>}
             </div>
 
             <div className="space-y-2">
@@ -225,12 +321,12 @@ const BookAppointment: React.FC = () => {
                 <option value="Morning (08:00 - 12:00)">Morning (08:00 - 12:00)</option>
                 <option value="Afternoon (12:00 - 17:00)">Afternoon (12:00 - 17:00)</option>
               </select>
-              {errors.time && <p className="text-red-500 text-xs font-semibold">{errors.time}</p>}
+              {errors.time && <p className="text-red-500 text-xs font-semibold ml-1">{errors.time}</p>}
             </div>
           </div>
 
           <div className="space-y-2 mb-8">
-            <label className="block text-sm font-bold text-slate-700">Additional Message</label>
+            <label className="block text-sm font-bold text-slate-700">Additional Message (Optional)</label>
             <textarea
               placeholder="Tell us more about your requirements..."
               rows={4}
@@ -242,14 +338,10 @@ const BookAppointment: React.FC = () => {
 
           <button
             type="submit"
-            className="w-full bg-blue-600 text-white py-5 rounded-xl font-extrabold text-xl shadow-lg hover:bg-blue-700 hover:scale-[1.01] transition-all"
+            className="w-full bg-blue-600 text-white py-5 rounded-xl font-extrabold text-xl shadow-lg hover:bg-blue-700 transition-all active:scale-[0.98]"
           >
             Confirm Booking Request
           </button>
-          
-          <p className="mt-6 text-center text-slate-500 text-sm">
-            By submitting this form, you agree to our privacy policy. We will never share your details.
-          </p>
         </form>
       </div>
     </div>
