@@ -1,0 +1,7 @@
+{
+  "name": "Copy of TGM Connect",
+  "description": "Professional Wireless Internet, CCTV, Alarm Systems, Solar, and Electrical services for homes and businesses.",
+  "requestFramePermissions": [
+    "geolocation"
+  ]
+}
